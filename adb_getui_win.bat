@@ -8,26 +8,28 @@ echo [1] view top activity
 echo [2] view top fragment
 echo [3] view activity stack
 echo ============
-set /p user_input=Please choose menu:
-if %user_input%==1 goto topActivity
-if %user_input%==2 goto topFragment
-if %user_input%==3 goto activityStack
-if not %user_input%=="" goto menu
+
+:loop
+set /p num=Please input a number:
+if %num%==1 call :topActivity
+if %num%==2 call :topFragment
+if %num%==3 call :activityStack
+if not %num%=="" goto loop
 
 :topActivity
 adb wait-for-device
 adb shell "dumpsys activity top | grep ACTIVITY | tail -n 1"
-echo. & pause
-goto menu
+echo.
+goto :eof
 
 :topFragment
 adb wait-for-device
 adb shell "dumpsys activity top | grep '#[0-9]: ' | tail -n 1"
-echo. & pause
-goto menu
+echo.
+goto :eof
 
 :activityStack
 adb wait-for-device
 adb shell "dumpsys activity activities | grep '* ActivityRecord{'"
-echo. & pause
-goto menu
+echo.
+goto :eof
