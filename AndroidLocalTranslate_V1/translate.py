@@ -41,13 +41,19 @@ def get_en_file_path():
         # 检查当前目录是否是 res 目录
         if os.path.basename(root) == 'res':
             # 构建 values/string.xml 路径
-            string_xml_path = os.path.join(root, 'values', 'strings.xml')
+            string_xml_path = os.path.join(root, 'values', 'string.xml')
+            strings_xml_path = os.path.join(root, 'values', 'strings.xml')
             # 检查文件是否存在
             if os.path.isfile(string_xml_path):
                 en_xml_path_list.append(string_xml_path)
                 res_path_list.append(root)
                 print(string_xml_path)
-                # print(root)
+                print(root)
+            elif os.path.isfile(strings_xml_path):
+                en_xml_path_list.append(strings_xml_path)
+                res_path_list.append(root)
+                print(strings_xml_path)
+                print(root)
             # else:
             #     print(f"找到 res 目录但未找到 values/strings.xml: {root}")
     return en_xml_path_list, res_path_list
@@ -55,12 +61,15 @@ def get_en_file_path():
 
 # 读取并解析string_en.xml
 def parse_en_file(path):
+    # 空行数
+    blank_line_count = 0
     with open(path, 'r', encoding='utf-8') as file:
         print(f'====================开始解析string_en.xml：{path}==================')
         in_string_tag = False
         for line in file:
             line = line.strip()
-            if line.startswith('<string ') and line.endswith('</string>'):
+            # <string name="disclaimer_content">
+            if line.startswith('<string ') and line.endswith('</string>'):# 单行情况
                 # 解析 <string> 标签
                 elem = etree.fromstring(line.replace('tools:', '').replace('xliff:', ''))
                 name = elem.get('name', '')
@@ -69,12 +78,29 @@ def parse_en_file(path):
                 # print(f"name: {name}, value: {value}")
             elif '<string ' in line and not in_string_tag:
                 in_string_tag = True  # 忽略多行 string 标签
+                name = get_name_by_mutil_line_string(line)# 单独处理多行string标签
+                en_dict[name] = None
             elif '</string>' in line:
                 in_string_tag = False
+            elif line == '': # 空行
+                blank_line_count = blank_line_count + 1
+                en_dict[str(blank_line_count)] = None
             elif not in_string_tag:  # 非 <string>
                 en_dict[line] = None
                 # print(line)  # 直接打印原始行
     print(f'====================解析完成string_en.xml：{path}==================')
+    return blank_line_count
+
+# 通过<string>标签取出name属性值
+def get_name_by_mutil_line_string(with_name_line):
+    pattern = re.compile('<string name="(.+)" ')
+    name_list = pattern.findall(with_name_line)
+    if len(name_list) > 0:
+        return name_list[0]
+    elif len(name_list) == 0 and with_name_line.find('<string name=') != -1:
+        pattern = re.compile('<string name="(.+)">')
+        return pattern.findall(with_name_line)[0]
+    return None# 字符串不是<string>标签格式
 
 # 读取带id的翻译文件
 def read_translate_xml_with_id(translate_file_path):
@@ -100,32 +126,54 @@ def read_translate_xml_with_id(translate_file_path):
 #     translate_dict[111] = "aaaa"
 
 # 将en_dict key 和 translate_dict key相同时，将value写入
-def write_file_with_translate(fp):
+def write_file_with_translate(fp, base_path, black_count):
+    my_folder = f'{base_path}\\{values_folder_name}'
+    if not os.path.exists(my_folder):
+        os.mkdir(my_folder)
     with open(fp, 'w', encoding='utf-8') as file:
         for key in en_dict:
-            if key in translate_dict:
-                str = f'\t<string name="{key}>${translate_dict[key]}</string>'
-            elif key != '' and (key not in translate_dict) and ('<' not in key):
-                str = f'\t<string name="{key}></string>'
+            if key in translate_dict.keys():
+                str = f'\t<string name="{key}">{translate_dict[key]}</string>'
+            elif is_blank_line(key, black_count) and en_dict[key] is None:# 空行
+                str = ''
+            elif key != '' and (key not in translate_dict) and ('<' not in key):# xls
+                str = f'\t<string name="{key}"></string>'
             else:
                 if 'resource' in key or 'xml' in key:
                     str = key
                 else:
                     str = f'\t{key}'
             file.write(str + "\n")
+    print(f'{fp}文件写入完毕')
+
+def is_blank_line(str_key, n):
+    # 检查是否为纯数字，并且在 [1, n] 范围内
+    if re.fullmatch(r'^\d+$', str_key):  # 纯数字
+        num = int(str_key)
+        if 1 <= num <= n:
+            return True
+    return False
 
 
-
-
-project_path = input('输入项目根路径: ')
-translate_file_path = ''
-final_translate_path = 'string.xml'
+# project_path = input('输入项目根路径: ')
+project_path = 'D:\\AndroidStudioProjects\\Baseline_study'
+translate_file_path = '平板界面文本 string完整版(1).xls'
+# 翻译的对应文件夹名称
+values_folder_name = 'values-aaa'
+write_base_path = project_path
 
 if not verify_path_and_exist():
-    en_xml_path_lists, res_path_lists = get_en_file_path()
-    for en_xml_path in en_xml_path_lists:
-       parse_en_file(en_xml_path)
-       # read_translate_xml_with_id(translate_file_path)
-       write_file_with_translate(final_translate_path)
+    # en_xml_path_lists, res_path_lists = get_en_file_path()
+    # for i in range(len(en_xml_path_lists)):
+    #     black_count1 = parse_en_file(en_xml_path_lists[i])
+    #     read_translate_xml_with_id(translate_file_path)
+    #     final_translate_path = f'{res_path_lists[i]}\\{values_folder_name}\\strings.xml'
+    #     write_file_with_translate(final_translate_path, res_path_lists[i], black_count1)
 
-    print("文件成功生成")
+    # 单测一个文件
+    en_xml_path = 'en.xml'
+    black_count1 = parse_en_file(en_xml_path)
+    read_translate_xml_with_id(translate_file_path)
+    write_file_with_translate('final.xml', '', black_count1)
+
+print('程序结束')
